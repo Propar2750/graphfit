@@ -41,6 +41,57 @@ def extract_table_from_image(image_bytes: bytes, mime_type: str, mode: str) -> d
         column_hint = (
             "The table likely has two numeric columns representing X and Y values. "
         )
+    elif mode == "photoelectric-1-1":
+        column_hint = (
+            "The table has V_bias (voltage) in the first column and photocurrent I "
+            "for different wavelengths in subsequent columns. Column headers may "
+            "include wavelength labels like λ=365nm, λ=405nm, etc. "
+        )
+    elif mode == "photoelectric-1-2":
+        column_hint = (
+            "The table has two columns: frequency (ν, in Hz or THz) "
+            "and stopping potential or stopping voltage (V_stop, in Volts). "
+        )
+    elif mode == "photoelectric-1-3":
+        column_hint = (
+            "The table has V_bias (voltage) in the first column and photocurrent I "
+            "for different lamp-phototube separations in subsequent columns. "
+            "Column headers may include distance labels like d=10cm, d=15cm, etc. "
+        )
+    elif mode == "single-slit":
+        column_hint = (
+            "The table has two columns: angle θ (theta, in degrees or radians) "
+            "and intensity I (arbitrary units or measured units). "
+            "θ may be negative for positions on one side of the central maximum. "
+        )
+    elif mode == "newtons-rings":
+        column_hint = (
+            "The table has two columns: ring number n (integer) and "
+            "diameter D_n of the ring (in cm or mm). "
+            "D_n may also be labeled as 'diameter' or 'D'. "
+        )
+    elif mode == "pohls-damped":
+        column_hint = (
+            "The table has time t in the first column and oscillation amplitude φ "
+            "(phi) for different damping currents in subsequent columns. "
+            "Column headers may include damping current labels like I_d=0.2A, etc. "
+        )
+    elif mode == "pohls-forced":
+        column_hint = (
+            "The table has forcing frequency (in Hz or rad/s) in the first column "
+            "and oscillation amplitude for different damping values in subsequent "
+            "columns. Column headers may include damping labels. "
+        )
+    elif mode == "polarization":
+        column_hint = (
+            "The table has two columns: concentration c (e.g. g/mL or mol/L) "
+            "and rotation angle θ (theta, in degrees). "
+        )
+    elif mode == "waves":
+        column_hint = (
+            "The table has two columns: frequency ν (nu, in Hz) and "
+            "wavelength λ (lambda, in m or cm). "
+        )
     else:
         column_hint = ""
 
@@ -85,7 +136,10 @@ Rules:
         max_completion_tokens=2048,
     )
 
-    raw_text = response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if content is None:
+        raise ValueError("Vision model returned an empty response.")
+    raw_text = content.strip()
 
     # Strip markdown code fences if present
     if raw_text.startswith("```"):

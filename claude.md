@@ -39,8 +39,9 @@ graph_figure_out/
 2. **Two fitting modes exist**:
    - `"straight-line"` → linear regression (y = mx + c)
    - `"cmc"` → concentration vs surface tension → find CMC via two-segment regression breakpoint
-3. **Frontend uses React Context** (not Redux). State is minimal: `fittingMode`, `uploadedFile`, `previewUrl`.
-4. **Results page shows**: uploaded table image, fitted graph area (placeholder), equation, extracted data table.
+3. **Frontend uses React Context** (not Redux). State is minimal: `fittingMode`, `uploadedFiles` (array), `previewUrls` (array).
+4. **Results page shows**: uploaded table images (thumbnails), fitted graph area, equation, extracted data table.
+5. **Multiple image uploads supported**: Users can upload several table images at once. Each is OCR'd separately and the extracted rows are merged into one dataset for review/fitting.
 5. **Backend API contract** is defined in frontend.md — `POST /api/analyze` accepting multipart form with `image` + `mode`, returning JSON with `equation`, `description`, `points`, `graphImageUrl`.
 
 ## When Building the Backend

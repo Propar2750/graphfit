@@ -3,7 +3,6 @@ Curve fitting service — fits parametric equations to data based on the selecte
 """
 
 import numpy as np
-from scipy import stats
 from scipy.optimize import curve_fit
 
 
@@ -16,11 +15,26 @@ def fit_straight_line(points: list[list[float]]) -> dict:
     arr = np.array(points, dtype=float)
     x = arr[:, 0]
     y = arr[:, 1]
+    n = len(x)
 
-    result = stats.linregress(x, y)
-    m = result.slope
-    c = result.intercept
-    r_sq = result.rvalue ** 2
+    # Closed-form least squares: m = (n Σxy − Σx Σy) / (n Σx² − (Σx)²)
+    sum_x = np.sum(x)
+    sum_y = np.sum(y)
+    sum_xy = np.sum(x * y)
+    sum_x2 = np.sum(x ** 2)
+
+    denom = n * sum_x2 - sum_x ** 2
+    if abs(denom) < 1e-15:
+        raise ValueError("All x-values are identical; cannot fit a line.")
+
+    m = (n * sum_xy - sum_x * sum_y) / denom
+    c = (sum_y - m * sum_x) / n
+
+    # R² = 1 − SS_res / SS_tot
+    y_pred = m * x + c
+    ss_res = np.sum((y - y_pred) ** 2)
+    ss_tot = np.sum((y - np.mean(y)) ** 2)
+    r_sq = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
     # Format equation string
     sign = "+" if c >= 0 else "−"
@@ -67,18 +81,6 @@ def _szyszkowski_continuous(x, a, b, c, x0):
         a + b * np.log(1.0 + c * x_safe),
         plateau,
     )
-
-
-def _log_curve(x, a, b, c):
-    """
-    Helper: Szyszkowski pre-CMC curve only.
-
-    y = a + b·ln(1 + c·x)
-
-    Used during the grid-search phase where we fit the log part
-    on the left segment independently for each candidate breakpoint.
-    """
-    return a + b * np.log(1.0 + c * np.clip(x, 0, None))
 
 
 def fit_cmc(points: list[list[float]]) -> dict:
@@ -227,209 +229,308 @@ def fit_cmc(points: list[list[float]]) -> dict:
     }
 
 
-def cost_function(params, x, y):
+# ─────────────────────────────────────────────────────────────────────
+#  New experiment-specific fitting functions
+# ─────────────────────────────────────────────────────────────────────
+
+def _find_zero_crossing(x, y):
+    """Find x-value where y crosses zero via linear interpolation."""
+    for j in range(len(y) - 1):
+        if y[j] * y[j + 1] <= 0 and y[j] != y[j + 1]:
+            return float(
+                x[j] + (0 - y[j]) * (x[j + 1] - x[j]) / (y[j + 1] - y[j])
+            )
+    # Fallback: x where |y| is smallest
+    return float(x[np.argmin(np.abs(y))])
+
+
+def fit_photoelectric_vi(points: list[list[float]], columns: list[str] = None) -> dict:
     """
-    Sum-of-squared-residuals cost for the Szyszkowski continuous model.
-
-    The model itself already returns the plateau for x >= x0, so a
-    simple SSE is all that's needed (no double-counting).
+    V_bias vs photocurrent for multiple wavelengths or separations.
+    Finds the stopping potential (V where I → 0) for each series.
     """
-    a, b, c, x0 = params
-    # Guard against invalid parameter values that would produce NaN
-    if c <= 0 or x0 <= 0:
-        return 1e30
-    y_pred = _szyszkowski_continuous(x, a, b, c, x0)
-    return np.sum((y - y_pred) ** 2)
-
-def gradient_descent(params, x, y, learning_rate=1e-3, max_iters=10000,
-                     bounds_lo=None, bounds_hi=None):
-    """
-    Adam-based gradient descent optimizer for the CMC model parameters.
-
-    Works in *normalised* parameter space (each parameter scaled by its
-    initial absolute value) so that a single learning rate is effective
-    across parameters that differ by orders of magnitude (e.g. a~72 vs
-    x0~0.008).  Bounds are enforced by projection after each step.
-
-    Uses the Adam update rule (Kingma & Ba, 2015) for adaptive per-
-    parameter learning rates, with central-difference numerical gradients.
-    """
-    params = np.asarray(params, dtype=np.float64)
-    n_params = len(params)
-
-    # ── Normalisation: work with params_norm = params / scale ────────
-    scale = np.where(np.abs(params) > 1e-12, np.abs(params), 1.0)
-
-    # Convert bounds to normalised space
-    if bounds_lo is not None:
-        lo_norm = np.asarray(bounds_lo, dtype=np.float64) / scale
-    else:
-        lo_norm = np.full(n_params, -np.inf)
-    if bounds_hi is not None:
-        hi_norm = np.asarray(bounds_hi, dtype=np.float64) / scale
-    else:
-        hi_norm = np.full(n_params, np.inf)
-
-    p_norm = params / scale  # initial normalised params (≈ ±1)
-
-    # ── Adam state ───────────────────────────────────────────────────
-    m = np.zeros(n_params)   # 1st moment
-    v = np.zeros(n_params)   # 2nd moment
-    beta1, beta2, eps_adam = 0.9, 0.999, 1e-8
-
-    eps_fd = 1e-7  # finite-difference step (in normalised space)
-    perturbations = np.eye(n_params) * eps_fd
-
-    def _cost_from_norm(pn):
-        return cost_function(pn * scale, x, y)
-
-    for t in range(1, max_iters + 1):
-        # Central-difference gradient in normalised space
-        p_plus = p_norm[np.newaxis, :] + perturbations
-        p_minus = p_norm[np.newaxis, :] - perturbations
-        costs_plus = np.array([_cost_from_norm(p) for p in p_plus])
-        costs_minus = np.array([_cost_from_norm(p) for p in p_minus])
-        grads = (costs_plus - costs_minus) / (2.0 * eps_fd)
-
-        # Adam moment updates
-        m = beta1 * m + (1 - beta1) * grads
-        v = beta2 * v + (1 - beta2) * grads ** 2
-        m_hat = m / (1 - beta1 ** t)
-        v_hat = v / (1 - beta2 ** t)
-
-        p_norm -= learning_rate * m_hat / (np.sqrt(v_hat) + eps_adam)
-
-        # Project back to bounds
-        p_norm = np.clip(p_norm, lo_norm, hi_norm)
-
-        # Convergence check (normalised gradient norm)
-        if np.dot(grads, grads) < 1e-14:
-            break
-
-    return p_norm * scale  # un-normalise
-def fit_cmc_2(points: list[list[float]]) -> dict:
-    """
-    The better alternative from scratch method
-    
-    Fit concentration (x) vs surface tension (y) to find the CMC.
-
-    Model (Szyszkowski-type, physically motivated):
-        Pre-CMC :  y = a + b·ln(1 + c·x)     (log adsorption curve)
-        Post-CMC:  y = d  (constant)           where d = a + b·ln(1 + c·x0)
-    
-    Fitting strategy:
-        1. Choose random reasonable values of a, b, c, x0 within bounds.
-        2. Use curve_fit to fit the continuous model with these initial parameters.
-        3. Calculate the error of the straight line fit after x0
-        4. Use gradient descent to iteratively adjust all parameters to minimize the combined error of the continuous fit and the straight line fit after x0.
-        5. Note: Gradient descent will be able to solve this problem. 
-    Parameters
-    ----------
-    points : list of [concentration, surface_tension] pairs
-
-    Returns
-    -------
-    dict with cmc_value, fitted parameters (a, b, c), equations, r_squared, etc.
-       
-    """
-    # ── Data preparation ─────────────────────────────────────────────
     arr = np.array(points, dtype=float)
-    # Sort by concentration (x-axis) so fitting is monotonic
     arr = arr[arr[:, 0].argsort()]
     x = arr[:, 0]
-    y = arr[:, 1]
+    series_count = arr.shape[1] - 1
 
-    n = len(x)
-    if n < 5:
-        raise ValueError("Need at least 5 data points to fit the CMC model.")
-    
-    # ── Initial parameter guesses ────────────────────────────────────
-    # a ≈ surface tension of pure solvent (highest y, usually the first point)
-    a_guess = float(y.max())
-    # b < 0 because surface tension *decreases* with surfactant concentration
-    b_guess = float(y.min() - y.max())
-    # c ≈ scale so that ln(1 + c·x_mid) ≈ 1  →  c ≈ (e-1)/x_mid
-    x_mid = float(np.median(x[x > 0])) if np.any(x > 0) else 1.0
-    c_guess = (np.e - 1.0) / x_mid
-    # x0 ≈ breakpoint where the curve starts to flatten.
-    # Use the point of maximum curvature change in y as a heuristic.
-    diffs = np.abs(np.diff(y))
-    cum = np.cumsum(diffs)
-    # Find where 80 % of total y-change has occurred
-    threshold = 0.8 * cum[-1]
-    idx = int(np.searchsorted(cum, threshold))
-    x0_guess = float(np.clip(x[min(idx + 1, n - 1)],
-                              x[2], x[-2]))  # keep away from edges
+    if series_count < 1:
+        raise ValueError("Need at least 2 columns (V_bias + one current series).")
 
-    # ── Multi-start gradient descent ────────────────────────────────
-    rng = np.random.default_rng(seed=42)
-    best_cost = float("inf")
-    best_params = None
+    series_labels = (
+        columns[1:] if columns and len(columns) > 1
+        else [f"Series {i + 1}" for i in range(series_count)]
+    )
 
-    # Parameter bounds: a free, b free, c > 0, x0 within data range
-    bounds_lo = np.array([-500.0, -500.0, 1e-6, float(x.min())])
-    bounds_hi = np.array([500.0,   500.0, 1e8,  float(x.max())])
+    stopping_potentials = {}
+    for i in range(series_count):
+        y = arr[:, i + 1]
+        v_stop = _find_zero_crossing(x, y)
+        stopping_potentials[series_labels[i]] = round(v_stop, 4)
 
-    # Build diverse starting points covering different regions of parameter space
-    starts = []
-    # Base heuristic
-    starts.append(np.array([a_guess, b_guess, c_guess, x0_guess]))
-    # Sweep x0 across data range (most important parameter to explore)
-    for frac in [0.3, 0.5, 0.7]:
-        x0_try = float(x[int(frac * (n - 1))])
-        starts.append(np.array([a_guess, b_guess, c_guess, x0_try]))
-    # Vary c over orders of magnitude
-    for c_mult in [0.1, 1.0, 10.0]:
-        starts.append(np.array([a_guess, b_guess, c_guess * c_mult, x0_guess]))
-    # Random perturbations
-    base_guess = np.array([a_guess, b_guess, c_guess, x0_guess])
-    for _ in range(4):
-        perturbed = base_guess * (1.0 + rng.uniform(-0.5, 0.5, size=4))
-        perturbed[2] = max(perturbed[2], 1e-6)
-        perturbed[3] = np.clip(perturbed[3], float(x.min()), float(x.max()))
-        starts.append(perturbed)
+    eq_parts = [f"{lbl}: V_stop = {v:.4g} V" for lbl, v in stopping_potentials.items()]
+    return {
+        "equation": "; ".join(eq_parts),
+        "description": (
+            f"V_bias vs photocurrent for {series_count} series. "
+            f"Stopping potentials found by interpolation where I → 0."
+        ),
+        "stopping_potentials": stopping_potentials,
+        "series_labels": series_labels,
+        "series_count": series_count,
+        "r_squared": None,
+    }
 
-    for p0 in starts:
-        params = gradient_descent(np.array(p0, dtype=np.float64), x, y,
-                                  learning_rate=1e-3, max_iters=5000,
-                                  bounds_lo=bounds_lo, bounds_hi=bounds_hi)
-        c = cost_function(params, x, y)
-        if c < best_cost:
-            best_cost = c
-            best_params = params.copy()
 
-    a_opt, b_opt, c_opt, x0_opt = best_params
+def fit_photoelectric_h(points: list[list[float]]) -> dict:
+    """
+    Stopping voltage vs frequency → linear fit.
+    V_stop = (h/e)·ν − W/e  →  slope = h/e  →  h = slope × e.
+    """
+    result = fit_straight_line(points)
+    e = 1.602176634e-19  # C
+    h_calc = abs(result["m"]) * e
+    h_actual = 6.62607015e-34
 
-    # ── Compute derived quantities ───────────────────────────────────
-    cmc_value = float(x0_opt)
-    plateau = float(a_opt + b_opt * np.log(1.0 + c_opt * x0_opt))
+    result["equation"] = f"V_stop = {result['m']:.6g}·ν + ({result['c']:.6g})"
+    result["description"] = (
+        f"Stopping voltage vs frequency: slope = h/e = {result['m']:.6g}. "
+        f"Calculated h = {h_calc:.4e} J·s (accepted: {h_actual:.4e} J·s). "
+        f"R² = {result['r_squared']:.6f}."
+    )
+    result["h_calculated"] = float(h_calc)
+    result["h_actual"] = h_actual
+    result["work_function_over_e"] = float(-result["c"])
+    return result
 
-    # Goodness-of-fit: R²
-    y_pred = _szyszkowski_continuous(x, a_opt, b_opt, c_opt, x0_opt)
-    ss_res = np.sum((y - y_pred) ** 2)
-    ss_tot = np.sum((y - np.mean(y)) ** 2)
+
+def _sinc_squared(theta, I0, alpha, theta0):
+    """Single slit diffraction: I = I₀ [sin(β)/β]² where β = α(θ − θ₀)."""
+    beta = alpha * (theta - theta0)
+    return np.where(np.abs(beta) < 1e-10, I0, I0 * (np.sin(beta) / beta) ** 2)
+
+
+def fit_single_slit(points: list[list[float]]) -> dict:
+    """
+    Fit single slit diffraction: I vs θ.
+    Model: I = I₀ [sin(α(θ−θ₀)) / (α(θ−θ₀))]²
+    """
+    arr = np.array(points, dtype=float)
+    arr = arr[arr[:, 0].argsort()]
+    theta = arr[:, 0]
+    intensity = arr[:, 1]
+
+    I0_guess = float(intensity.max())
+    theta0_guess = float(theta[np.argmax(intensity)])
+    alpha_guess = 10.0
+
+    try:
+        popt, _ = curve_fit(
+            _sinc_squared, theta, intensity,
+            p0=[I0_guess, alpha_guess, theta0_guess],
+            maxfev=20000,
+        )
+        I0, alpha, theta0 = popt
+    except (RuntimeError, ValueError):
+        raise RuntimeError(
+            "Failed to fit single slit diffraction pattern. "
+            "Check that the data has a clear central maximum."
+        )
+
+    y_pred = _sinc_squared(theta, I0, alpha, theta0)
+    ss_res = np.sum((intensity - y_pred) ** 2)
+    ss_tot = np.sum((intensity - np.mean(intensity)) ** 2)
     r_sq = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-    # ── Human-readable equation strings ──────────────────────────────
-    b_sign = "+" if b_opt >= 0 else "−"
-    eq_pre = f"γ = {a_opt:.4f} {b_sign} {abs(b_opt):.4f}·ln(1 + {c_opt:.4f}·x)"
-    eq_post = f"γ = {plateau:.4f}"
+    return {
+        "equation": f"I = {I0:.4f} × [sin({alpha:.4f}·(θ−{theta0:.4f})) / ({alpha:.4f}·(θ−{theta0:.4f}))]²",
+        "description": (
+            f"Single slit diffraction fitted with sinc² model. "
+            f"Central maximum at θ₀ = {theta0:.4f}. I₀ = {I0:.4f}. R² = {r_sq:.6f}."
+        ),
+        "I0": float(I0),
+        "alpha": float(alpha),
+        "theta0": float(theta0),
+        "r_squared": float(r_sq),
+    }
+
+
+def fit_newtons_rings(points: list[list[float]]) -> dict:
+    """
+    Input: [[n, D_n], ...].
+    Transforms to D² vs n, then linear fit.
+    D² = slope·n + intercept, where slope = 4Rλ.
+    """
+    arr = np.array(points, dtype=float)
+    n = arr[:, 0]
+    d = arr[:, 1]
+    d_sq = d ** 2
+
+    transformed = [[float(n[i]), float(d_sq[i])] for i in range(len(n))]
+    result = fit_straight_line(transformed)
+
+    slope = result["m"]
+    intercept = result["c"]
+    r_sq = result["r_squared"]
+    sign = "+" if intercept >= 0 else "−"
+
+    result["equation"] = f"D² = {slope:.4f}·n {sign} {abs(intercept):.4f}"
+    result["description"] = (
+        f"Newton's Rings: D² vs n fitted with least squares. "
+        f"Slope = {slope:.4f} (= 4Rλ). R² = {r_sq:.6f}."
+    )
+    result["slope_4Rlambda"] = float(slope)
+    result["transformed_points"] = transformed
+    return result
+
+
+def fit_pohls_damped(points: list[list[float]], columns: list[str] = None) -> dict:
+    """
+    Damped oscillation: [[t, φ₁, φ₂, ...], ...].
+    Transforms to ln(φ) and fits a straight line per series.
+    ln(φ) = −δ·t + const  →  damping constant δ = −slope.
+    """
+    arr = np.array(points, dtype=float)
+    arr = arr[arr[:, 0].argsort()]
+    t = arr[:, 0]
+    series_count = arr.shape[1] - 1
+
+    if series_count < 1:
+        raise ValueError("Need at least 2 columns (t + one amplitude series).")
+
+    series_labels = (
+        columns[1:] if columns and len(columns) > 1
+        else [f"I_d = {i + 1}" for i in range(series_count)]
+    )
+
+    series_fits = {}
+    eq_parts = []
+
+    for i in range(series_count):
+        phi = arr[:, i + 1]
+        label = series_labels[i]
+        mask = phi > 0
+        if mask.sum() < 2:
+            continue
+
+        ln_phi = np.log(phi[mask])
+        t_valid = t[mask]
+        pts = [[float(t_valid[j]), float(ln_phi[j])] for j in range(len(t_valid))]
+        res = fit_straight_line(pts)
+
+        damping = -res["m"]
+        series_fits[label] = {
+            "slope": res["m"],
+            "intercept": res["c"],
+            "damping_constant": float(damping),
+            "r_squared": res["r_squared"],
+        }
+        eq_parts.append(f"{label}: δ = {damping:.4f}")
 
     return {
-        "cmc_value": cmc_value,
-        "cmc_surface_tension": plateau,
-        "a": float(a_opt),
-        "b": float(b_opt),
-        "c": float(c_opt),
-        "equation": f"CMC ≈ {cmc_value:.4g}",
-        "equation_pre_cmc": eq_pre,
-        "equation_post_cmc": eq_post,
-        "r_squared": float(r_sq),
+        "equation": "; ".join(eq_parts) if eq_parts else "No valid fits",
         "description": (
-            f"Szyszkowski-type model (gradient descent): "
-            f"γ = a + b·ln(1 + c·x) for x < CMC, γ = constant for x ≥ CMC. "
-            f"Breakpoint at x = {cmc_value:.4g} gives the CMC. "
-            f"R² = {r_sq:.6f}."
+            f"Damped oscillation: ln(φ) vs t fitted for {len(series_fits)} damping levels. "
+            f"Slope = −δ (damping constant)."
         ),
+        "series_fits": series_fits,
+        "series_labels": series_labels,
+        "series_count": series_count,
+        "r_squared": None,
     }
-    
+
+
+def fit_pohls_forced(points: list[list[float]], columns: list[str] = None) -> dict:
+    """
+    Forced oscillation: [[freq, A₁, A₂, ...], ...].
+    Finds resonance frequency (peak amplitude) for each damping value.
+    """
+    arr = np.array(points, dtype=float)
+    arr = arr[arr[:, 0].argsort()]
+    freq = arr[:, 0]
+    series_count = arr.shape[1] - 1
+
+    if series_count < 1:
+        raise ValueError("Need at least 2 columns (frequency + one amplitude series).")
+
+    series_labels = (
+        columns[1:] if columns and len(columns) > 1
+        else [f"Damping {i + 1}" for i in range(series_count)]
+    )
+
+    resonances = {}
+    eq_parts = []
+
+    for i in range(series_count):
+        amp = arr[:, i + 1]
+        label = series_labels[i]
+        peak_idx = int(np.argmax(amp))
+        f_res = float(freq[peak_idx])
+        a_max = float(amp[peak_idx])
+        resonances[label] = {
+            "resonance_frequency": f_res,
+            "max_amplitude": a_max,
+        }
+        eq_parts.append(f"{label}: f_res = {f_res:.4g}")
+
+    return {
+        "equation": "; ".join(eq_parts),
+        "description": (
+            f"Forced oscillation: amplitude vs frequency for {series_count} damping values. "
+            f"Resonance at peak amplitude for each."
+        ),
+        "resonances": resonances,
+        "series_labels": series_labels,
+        "series_count": series_count,
+        "r_squared": None,
+    }
+
+
+def fit_polarization(points: list[list[float]]) -> dict:
+    """
+    Optical rotation: θ vs c → linear fit.
+    θ = [α]·l·c  →  slope = [α]·l.
+    """
+    result = fit_straight_line(points)
+    slope = result["m"]
+    r_sq = result["r_squared"]
+    sign = "+" if result["c"] >= 0 else "−"
+
+    result["equation"] = f"θ = {slope:.4f}·c {sign} {abs(result['c']):.4f}"
+    result["description"] = (
+        f"Optical rotation: θ vs concentration fitted with least squares. "
+        f"Slope = {slope:.4f} (= [α]·l). R² = {r_sq:.6f}."
+    )
+    result["specific_rotation_times_l"] = float(slope)
+    return result
+
+
+def fit_waves(points: list[list[float]]) -> dict:
+    """
+    Input: [[ν, λ], ...] — frequency and wavelength.
+    Transforms to λ vs 1/ν, then linear fit.
+    λ = v·(1/ν)  →  slope = v (phase velocity).
+    """
+    arr = np.array(points, dtype=float)
+    nu = arr[:, 0]
+    lam = arr[:, 1]
+
+    if np.any(nu == 0):
+        raise ValueError("Frequency values must be non-zero for 1/ν transformation.")
+
+    inv_nu = 1.0 / nu
+    transformed = [[float(inv_nu[i]), float(lam[i])] for i in range(len(nu))]
+    result = fit_straight_line(transformed)
+
+    velocity = result["m"]
+    r_sq = result["r_squared"]
+    sign = "+" if result["c"] >= 0 else "−"
+
+    result["equation"] = f"λ = {velocity:.4f}·(1/ν) {sign} {abs(result['c']):.4f}"
+    result["description"] = (
+        f"Wavelength vs 1/frequency fitted with least squares. "
+        f"Slope = {velocity:.4f} (phase velocity). R² = {r_sq:.6f}."
+    )
+    result["phase_velocity"] = float(velocity)
+    result["transformed_points"] = transformed
+    return result

@@ -4,8 +4,8 @@ const AppContext = createContext();
 
 export function AppProvider({ children }) {
   const [fittingMode, setFittingMode] = useState(null);
-  const [uploadedFile, setUploadedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]); // Array of File objects
+  const [previewUrls, setPreviewUrls] = useState([]); // Array of blob URLs
   const [extractedData, setExtractedData] = useState(null); // { columns, rows }
   const [results, setResults] = useState(null); // { equation, description, points, graphImage, fitParams }
 
@@ -13,20 +13,30 @@ export function AppProvider({ children }) {
     setFittingMode(mode);
   };
 
-  const setFile = (file) => {
-    setUploadedFile(file);
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setPreviewUrl(url);
-    } else {
-      setPreviewUrl(null);
-    }
+  const addFiles = (newFiles) => {
+    const filesArray = Array.from(newFiles);
+    setUploadedFiles((prev) => [...prev, ...filesArray]);
+    const newUrls = filesArray.map((f) => URL.createObjectURL(f));
+    setPreviewUrls((prev) => [...prev, ...newUrls]);
+  };
+
+  const removeFile = (index) => {
+    setPreviewUrls((prev) => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const clearFiles = () => {
+    previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    setUploadedFiles([]);
+    setPreviewUrls([]);
   };
 
   const reset = () => {
     setFittingMode(null);
-    setUploadedFile(null);
-    setPreviewUrl(null);
+    clearFiles();
     setExtractedData(null);
     setResults(null);
   };
@@ -35,12 +45,14 @@ export function AppProvider({ children }) {
     <AppContext.Provider
       value={{
         fittingMode,
-        uploadedFile,
-        previewUrl,
+        uploadedFiles,
+        previewUrls,
         extractedData,
         results,
         selectMode,
-        setFile,
+        addFiles,
+        removeFile,
+        clearFiles,
         setExtractedData,
         setResults,
         reset,
