@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -48,12 +48,18 @@ if STATIC_DIR.is_dir():
     async def vite_svg():
         return FileResponse(STATIC_DIR / "vite.svg")
 
+    # Serve static files (favicon, etc.) at the root level
+    @app.get("/", include_in_schema=False)
+    async def serve_index():
+        return FileResponse(STATIC_DIR / "index.html")
+
     # SPA fallback: serve index.html for all non-API GET routes
-    @app.api_route("/{full_path:path}", methods=["GET"], include_in_schema=False)
-    async def serve_spa(request: Request, full_path: str):
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
         # Don't intercept /api or /docs or /openapi.json
         if full_path.startswith("api") or full_path in ("docs", "redoc", "openapi.json"):
-            return
+            from starlette.exceptions import HTTPException
+            raise HTTPException(status_code=404)
         file_path = STATIC_DIR / full_path
         if full_path and file_path.is_file():
             return FileResponse(file_path)

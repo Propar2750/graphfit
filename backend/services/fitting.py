@@ -183,14 +183,10 @@ def fit_cmc(points: list[list[float]]) -> dict:
         )
         a_opt, b_opt, c_opt, x0_opt = popt_final
     except (RuntimeError, ValueError):
-        # Optimiser failed; use the best result from the grid search
-        if best_popt is not None:
-            a_opt, b_opt, c_opt, x0_opt = best_popt
-        else:
-            raise RuntimeError(
-                "CMC fitting failed — check that the data has a clear "
-                "transition from decreasing surface tension to a plateau."
-            )
+        raise RuntimeError(
+            "CMC fitting failed — check that the data has a clear "
+            "transition from decreasing surface tension to a plateau."
+        )
 
     # ── Compute derived quantities ───────────────────────────────────
     cmc_value = float(x0_opt)
