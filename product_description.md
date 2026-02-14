@@ -1,0 +1,3 @@
+**Basic Idea**: The main product is a website in which you navigate a menu of options of what should the graph look like, then upload a picture, then the backend uses machine learning to find the best fit for the graph .  Then it will output the graph with the points and fitted equation, also it will show the equation of the graph. 
+
+The intro page will tell about the website and will have a menu option on which _line fit to use_, it will have an option of a straight line. and the rest of the options for now will be inspired by my chem exp, so make one labelled physical exp.1 in which i need to fit a graph of concenteration vs surface tension, and the purpose of it is to find CMC . We will design the backend for this later. 
