@@ -87,10 +87,29 @@ def extract_table_from_image(image_bytes: bytes, mime_type: str, mode: str) -> d
             "The table has two columns: concentration c (e.g. g/mL or mol/L) "
             "and rotation angle θ (theta, in degrees). "
         )
-    elif mode == "waves":
+    elif mode == "waves-rope":
         column_hint = (
-            "The table has two columns: frequency ν (nu, in Hz) and "
-            "wavelength λ (lambda, in m or cm). "
+            "This is Table 1: Phase velocity of rope waves (transverse waves). "
+            "The table has 3 groups of rows (typically 4 rows each), separated "
+            "by different tension/mass values like (50+50)g, (100+50)g, (150+50)g. "
+            "For each row, extract ONLY these values: "
+            "  - A group number (1, 2, or 3) based on which tension group the row belongs to "
+            "  - The '1/v' or '1/ν' column value (inverse frequency, in seconds) "
+            "  - The 'λ' or 'λ = 2L/n' column value (wavelength, dimensionless or in meters) "
+            "Return columns: ['group', 'inv_freq', 'wavelength']. "
+            "Group 1 = first/top group, Group 2 = second/middle group, Group 3 = third/bottom group. "
+            "There should be about 12 rows total (4 per group). "
+        )
+    elif mode == "waves-sound":
+        column_hint = (
+            "This is Table 2: Velocity of sound in air (longitudinal waves). "
+            "The table has columns including natural frequency of tuning fork ν (in Hz) "
+            "and length of air column L (in cm). Other columns like 1/v, mode number n, "
+            "λ, and velocity may be empty/unfilled. "
+            "Extract ONLY the frequency (ν in Hz) and the length of air column (L in cm) "
+            "for each row that has data. Ignore empty columns. "
+            "Return columns: ['frequency_hz', 'length_cm']. "
+            "There should be about 6 rows. "
         )
     else:
         column_hint = ""

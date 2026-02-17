@@ -15,7 +15,8 @@ from services.fitting import (
     fit_pohls_damped,
     fit_pohls_forced,
     fit_polarization,
-    fit_waves,
+    fit_waves_rope,
+    fit_waves_sound,
 )
 from services.plotting import generate_graph
 
@@ -85,8 +86,6 @@ async def fit(req: FitRequest):
             fit_params = fit_pohls_forced(req.points, req.columns)
         elif req.mode == "polarization":
             fit_params = fit_polarization(req.points)
-        elif req.mode == "waves":
-            fit_params = fit_waves(req.points)
         else:
             raise HTTPException(
                 status_code=400, detail=f"Unknown fitting mode: '{req.mode}'"
@@ -110,4 +109,75 @@ async def fit(req: FitRequest):
         "columns": req.columns,
         "graphImage": graph_image,
         "fitParams": fit_params,
+    }
+
+
+class FitWavesRequest(BaseModel):
+    rope_points: list[list[float]]
+    rope_columns: list[str] = []
+    sound_points: list[list[float]]
+    sound_columns: list[str] = []
+
+
+@router.post("/fit-waves")
+async def fit_waves_endpoint(req: FitWavesRequest):
+    """Fit both rope wave (Table 1) and sound wave (Table 2) data.
+    Returns two separate graphs and fit parameters."""
+
+    if len(req.rope_points) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 rope data points.")
+    if len(req.sound_points) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 sound data points.")
+
+    # Validate row widths
+    for i, pt in enumerate(req.rope_points):
+        if len(pt) != 3:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Rope row {i + 1} must have 3 values (group, 1/ν, λ), got {len(pt)}.",
+            )
+    for i, pt in enumerate(req.sound_points):
+        if len(pt) != 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sound row {i + 1} must have 2 values (freq, length_cm), got {len(pt)}.",
+            )
+
+    try:
+        rope_fit = fit_waves_rope(req.rope_points)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Rope wave fitting error: {str(e)}")
+
+    try:
+        sound_fit = fit_waves_sound(req.sound_points)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sound wave fitting error: {str(e)}")
+
+    try:
+        rope_graph = generate_graph(req.rope_points, rope_fit, "waves-rope", req.rope_columns)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Rope graph error: {str(e)}")
+
+    try:
+        sound_graph = generate_graph(req.sound_points, sound_fit, "waves-sound", req.sound_columns)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sound graph error: {str(e)}")
+
+    return {
+        "equation": (
+            "── Rope Waves (Transverse) ──\n"
+            + rope_fit["equation"]
+            + "\n\n── Sound Waves (Longitudinal) ──\n"
+            + sound_fit["equation"]
+            + f"  →  v = {sound_fit['phase_velocity']:.2f} m/s  (R² = {sound_fit['r_squared']:.4f})"
+        ),
+        "description": rope_fit["description"] + "\n" + sound_fit["description"],
+        "ropeGraphImage": rope_graph,
+        "soundGraphImage": sound_graph,
+        "ropeFitParams": rope_fit,
+        "soundFitParams": sound_fit,
+        "ropePoints": req.rope_points,
+        "soundPoints": req.sound_points,
+        "ropeColumns": req.rope_columns,
+        "soundColumns": req.sound_columns,
     }

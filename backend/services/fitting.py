@@ -505,31 +505,97 @@ def fit_polarization(points: list[list[float]]) -> dict:
     return result
 
 
-def fit_waves(points: list[list[float]]) -> dict:
+def fit_waves_rope(points: list[list[float]]) -> dict:
     """
-    Input: [[ν, λ], ...] — frequency and wavelength.
-    Transforms to λ vs 1/ν, then linear fit.
-    λ = v·(1/ν)  →  slope = v (phase velocity).
+    Input: [[group, 1/ν, λ], ...] — grouped rope wave data.
+    Groups by column 0 (group ID), then fits λ vs 1/ν per group.
+    Each group's slope = phase velocity for that tension.
+
+    Returns dict with per-group fits, equations, and overall description.
     """
     arr = np.array(points, dtype=float)
-    nu = arr[:, 0]
-    lam = arr[:, 1]
+    groups = np.unique(arr[:, 0])
 
-    if np.any(nu == 0):
-        raise ValueError("Frequency values must be non-zero for 1/ν transformation.")
+    series_fits = {}
+    eq_parts = []
+    group_labels = []
 
-    inv_nu = 1.0 / nu
-    transformed = [[float(inv_nu[i]), float(lam[i])] for i in range(len(nu))]
+    for idx, g in enumerate(sorted(groups)):
+        mask = arr[:, 0] == g
+        inv_nu = arr[mask, 1]
+        lam = arr[mask, 2]
+
+        if len(inv_nu) < 2:
+            continue
+
+        transformed = [[float(inv_nu[i]), float(lam[i])] for i in range(len(inv_nu))]
+        result = fit_straight_line(transformed)
+
+        label = f"T{idx + 1}"
+        velocity = result["m"]
+        r_sq = result["r_squared"]
+        sign = "+" if result["c"] >= 0 else "−"
+
+        line_eq = f"λ = {velocity:.2f}·(1/ν) {sign} {abs(result['c']):.4f}"
+
+        series_fits[label] = {
+            "slope": result["m"],
+            "intercept": result["c"],
+            "phase_velocity": float(velocity),
+            "r_squared": result["r_squared"],
+            "transformed_points": transformed,
+            "line_equation": line_eq,
+        }
+        eq_parts.append(f"{label}: {line_eq}  →  v = {velocity:.2f} m/s  (R² = {r_sq:.4f})")
+        group_labels.append(label)
+
+    if not series_fits:
+        raise ValueError("No valid groups found in rope wave data.")
+
+    return {
+        "equation": "\n".join(eq_parts),
+        "description": (
+            f"Phase velocity of rope waves: λ vs 1/ν fitted for {len(series_fits)} tension groups. "
+            f"Slope of each line = phase velocity."
+        ),
+        "series_fits": series_fits,
+        "series_labels": group_labels,
+        "series_count": len(series_fits),
+        "r_squared": None,
+    }
+
+
+def fit_waves_sound(points: list[list[float]]) -> dict:
+    """
+    Input: [[frequency_hz, length_cm], ...] — sound wave data.
+    Computes 1/ν and λ = 4L/100 (fundamental mode, closed pipe, cm → m).
+    Fits λ vs 1/ν. Slope = speed of sound.
+
+    Returns dict with fit parameters and speed of sound.
+    """
+    arr = np.array(points, dtype=float)
+    freq = arr[:, 0]
+    length_cm = arr[:, 1]
+
+    if np.any(freq == 0):
+        raise ValueError("Frequency values must be non-zero.")
+
+    # Compute derived quantities
+    inv_nu = 1.0 / freq
+    # For closed pipe, fundamental mode: λ = 4L
+    lam = 4.0 * length_cm / 100.0  # convert cm to m
+
+    transformed = [[float(inv_nu[i]), float(lam[i])] for i in range(len(freq))]
     result = fit_straight_line(transformed)
 
     velocity = result["m"]
     r_sq = result["r_squared"]
     sign = "+" if result["c"] >= 0 else "−"
 
-    result["equation"] = f"λ = {velocity:.4f}·(1/ν) {sign} {abs(result['c']):.4f}"
+    result["equation"] = f"λ = {velocity:.2f}·(1/ν) {sign} {abs(result['c']):.4f}"
     result["description"] = (
-        f"Wavelength vs 1/frequency fitted with least squares. "
-        f"Slope = {velocity:.4f} (phase velocity). R² = {r_sq:.6f}."
+        f"Velocity of sound in air: λ vs 1/ν fitted with least squares. "
+        f"Slope = {velocity:.2f} m/s (speed of sound). R² = {r_sq:.6f}."
     )
     result["phase_velocity"] = float(velocity)
     result["transformed_points"] = transformed

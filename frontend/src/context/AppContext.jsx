@@ -9,6 +9,14 @@ export function AppProvider({ children }) {
   const [extractedData, setExtractedData] = useState(null); // { columns, rows }
   const [results, setResults] = useState(null); // { equation, description, points, graphImage, fitParams }
 
+  // Waves experiment — dual-table state
+  const [wavesRopeFile, setWavesRopeFile] = useState(null);
+  const [wavesRopePreview, setWavesRopePreview] = useState(null);
+  const [wavesSoundFile, setWavesSoundFile] = useState(null);
+  const [wavesSoundPreview, setWavesSoundPreview] = useState(null);
+  const [wavesRopeData, setWavesRopeData] = useState(null); // { columns, rows }
+  const [wavesSoundData, setWavesSoundData] = useState(null); // { columns, rows }
+
   const selectMode = (mode) => {
     setFittingMode(mode);
   };
@@ -28,6 +36,28 @@ export function AppProvider({ children }) {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const setWavesRopeFileWithPreview = (file) => {
+    if (wavesRopePreview) URL.revokeObjectURL(wavesRopePreview);
+    if (file) {
+      setWavesRopeFile(file);
+      setWavesRopePreview(URL.createObjectURL(file));
+    } else {
+      setWavesRopeFile(null);
+      setWavesRopePreview(null);
+    }
+  };
+
+  const setWavesSoundFileWithPreview = (file) => {
+    if (wavesSoundPreview) URL.revokeObjectURL(wavesSoundPreview);
+    if (file) {
+      setWavesSoundFile(file);
+      setWavesSoundPreview(URL.createObjectURL(file));
+    } else {
+      setWavesSoundFile(null);
+      setWavesSoundPreview(null);
+    }
+  };
+
   const clearFiles = () => {
     previewUrls.forEach((url) => URL.revokeObjectURL(url));
     setUploadedFiles([]);
@@ -39,6 +69,15 @@ export function AppProvider({ children }) {
     clearFiles();
     setExtractedData(null);
     setResults(null);
+    // Reset waves state
+    if (wavesRopePreview) URL.revokeObjectURL(wavesRopePreview);
+    if (wavesSoundPreview) URL.revokeObjectURL(wavesSoundPreview);
+    setWavesRopeFile(null);
+    setWavesRopePreview(null);
+    setWavesSoundFile(null);
+    setWavesSoundPreview(null);
+    setWavesRopeData(null);
+    setWavesSoundData(null);
   };
 
   return (
@@ -56,6 +95,17 @@ export function AppProvider({ children }) {
         setExtractedData,
         setResults,
         reset,
+        // Waves dual-table state
+        wavesRopeFile,
+        wavesRopePreview,
+        wavesSoundFile,
+        wavesSoundPreview,
+        wavesRopeData,
+        wavesSoundData,
+        setWavesRopeFileWithPreview,
+        setWavesSoundFileWithPreview,
+        setWavesRopeData,
+        setWavesSoundData,
       }}
     >
       {children}

@@ -337,16 +337,61 @@ def generate_graph(
             bbox=dict(boxstyle="round,pad=0.4", facecolor="#fef3c7", edgecolor="#fbbf24"),
         )
 
-    # ── Waves — λ vs 1/ν ─────────────────────────────────────────────
-    elif mode == "waves":
+    # ── Waves — Rope (λ vs 1/ν, 3 lines per tension group) ─────────
+    elif mode == "waves-rope":
+        series_fits = fit_params.get("series_fits", {})
+        series_labels = fit_params.get("series_labels", [])
+
+        # Group the raw data points by group column (col 0)
+        group_ids = np.unique(arr[:, 0])
+
+        for idx, g in enumerate(sorted(group_ids)):
+            mask = arr[:, 0] == g
+            inv_nu = arr[mask, 1]
+            lam = arr[mask, 2]
+
+            label = series_labels[idx] if idx < len(series_labels) else f"T{idx+1}"
+            clr = SERIES_COLORS[idx % len(SERIES_COLORS)]
+            mkr = SERIES_MARKERS[idx % len(SERIES_MARKERS)]
+
+            ax.scatter(inv_nu, lam, color=clr, s=50, marker=mkr, zorder=5,
+                       edgecolors="white", linewidths=0.5, label=f"{label} data")
+
+            if label in series_fits:
+                sf = series_fits[label]
+                x_line = np.linspace(inv_nu.min(), inv_nu.max(), 100)
+                y_line = sf["slope"] * x_line + sf["intercept"]
+                vel = sf["phase_velocity"]
+                ax.plot(x_line, y_line, color=clr, linewidth=2, alpha=0.8,
+                        label=f"{label}: v = {vel:.2f} m/s")
+
+        ax.set_xlabel("1/ν (s)", fontsize=12)
+        ax.set_ylabel("λ (m)", fontsize=12)
+        ax.set_title("Transverse Waves — λ vs 1/ν (Rope)", fontsize=14, fontweight="bold")
+
+        annot = [
+            f"{lbl}: v = {sf['phase_velocity']:.2f} m/s, R² = {sf['r_squared']:.4f}"
+            for lbl, sf in series_fits.items()
+        ]
+        if annot:
+            ax.text(
+                0.02, 0.98, "\n".join(annot),
+                transform=ax.transAxes, fontsize=8, verticalalignment="top",
+                bbox=dict(boxstyle="round,pad=0.4", facecolor="#eff6ff", edgecolor="#93c5fd"),
+            )
+
+    # ── Waves — Sound (λ vs 1/ν, single line) ────────────────────────
+    elif mode == "waves-sound":
         transformed = fit_params.get("transformed_points")
         if transformed:
             t_arr = np.array(transformed, dtype=float)
             t_arr = t_arr[t_arr[:, 0].argsort()]
             xp, yp = t_arr[:, 0], t_arr[:, 1]
         else:
-            yp = arr[:, 1]
-            xp = 1.0 / x
+            freq = arr[:, 0]
+            length_cm = arr[:, 1]
+            xp = 1.0 / freq
+            yp = 4.0 * length_cm / 100.0
 
         ax.scatter(xp, yp, color=SERIES_COLORS[0], s=60, zorder=5,
                    label="Data Points", edgecolors="white", linewidths=0.5)
@@ -360,12 +405,12 @@ def generate_graph(
 
         velocity = fit_params.get("phase_velocity", m)
         ax.set_xlabel("1/ν (s)", fontsize=12)
-        ax.set_ylabel("λ (wavelength)", fontsize=12)
-        ax.set_title("Transverse & Longitudinal Waves — λ vs 1/ν", fontsize=14, fontweight="bold")
+        ax.set_ylabel("λ (m)", fontsize=12)
+        ax.set_title("Longitudinal Waves — λ vs 1/ν (Sound in Air)", fontsize=14, fontweight="bold")
 
         ax.text(
             0.05, 0.95,
-            f"{fit_params['equation']}\nPhase velocity = {velocity:.4f}\nR² = {fit_params['r_squared']:.6f}",
+            f"{fit_params['equation']}\nSpeed of sound = {velocity:.2f} m/s\nR² = {fit_params['r_squared']:.6f}",
             transform=ax.transAxes, fontsize=10, verticalalignment="top",
             bbox=dict(boxstyle="round,pad=0.4", facecolor="#eff6ff", edgecolor="#93c5fd"),
         )

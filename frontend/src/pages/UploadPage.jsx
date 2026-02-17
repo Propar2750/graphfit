@@ -19,8 +19,23 @@ const MODE_LABELS = {
 
 export default function UploadPage() {
   const navigate = useNavigate();
-  const { fittingMode, uploadedFiles, previewUrls, addFiles, removeFile, setExtractedData } =
-    useAppContext();
+  const {
+    fittingMode,
+    uploadedFiles,
+    previewUrls,
+    addFiles,
+    removeFile,
+    setExtractedData,
+    // Waves dual-table state
+    wavesRopeFile,
+    wavesRopePreview,
+    wavesSoundFile,
+    wavesSoundPreview,
+    setWavesRopeFileWithPreview,
+    setWavesSoundFileWithPreview,
+    setWavesRopeData,
+    setWavesSoundData,
+  } = useAppContext();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -49,6 +64,62 @@ export default function UploadPage() {
   }
 
   const handleExtract = async () => {
+    // Waves mode: dual-image extraction
+    if (fittingMode === "waves") {
+      if (!wavesRopeFile || !wavesSoundFile) return;
+
+      setLoading(true);
+      setError(null);
+      setProgress("");
+
+      try {
+        // Extract rope table (Table 1)
+        setProgress("Extracting Table 1 (Rope Waves)...");
+        const ropeForm = new FormData();
+        ropeForm.append("image", wavesRopeFile);
+        ropeForm.append("mode", "waves-rope");
+
+        const ropeRes = await fetch("/api/extract", {
+          method: "POST",
+          body: ropeForm,
+        });
+
+        if (!ropeRes.ok) {
+          const errData = await ropeRes.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error on rope table (${ropeRes.status})`);
+        }
+        const ropeData = await ropeRes.json();
+        setWavesRopeData(ropeData);
+
+        // Extract sound table (Table 2)
+        setProgress("Extracting Table 2 (Sound Waves)...");
+        const soundForm = new FormData();
+        soundForm.append("image", wavesSoundFile);
+        soundForm.append("mode", "waves-sound");
+
+        const soundRes = await fetch("/api/extract", {
+          method: "POST",
+          body: soundForm,
+        });
+
+        if (!soundRes.ok) {
+          const errData = await soundRes.json().catch(() => ({}));
+          throw new Error(errData.detail || `Server error on sound table (${soundRes.status})`);
+        }
+        const soundData = await soundRes.json();
+        setWavesSoundData(soundData);
+
+        navigate("/review");
+      } catch (err) {
+        setError(err.message || "Failed to extract data. Please try again.");
+      } finally {
+        setLoading(false);
+        setProgress("");
+      }
+      return;
+    }
+
+    // Standard mode: single/multi-image extraction
     if (uploadedFiles.length === 0) return;
 
     setLoading(true);
@@ -139,20 +210,119 @@ export default function UploadPage() {
         Upload Your Data Tables
       </h1>
       <p className="text-slate-500 text-center mb-10 max-w-md mx-auto">
-        Upload one or more photos / screenshots of your data tables. We&rsquo;ll extract and merge the numbers automatically.
+        {fittingMode === "waves"
+          ? "Upload two photos: one for the Rope Wave table (Table 1) and one for the Sound Wave table (Table 2)."
+          : "Upload one or more photos / screenshots of your data tables. We\u2019ll extract and merge the numbers automatically."}
       </p>
 
-      {/* Dropzone */}
-      <FileDropzone
-        onFilesAdd={addFiles}
-        previewUrls={previewUrls}
-        onRemoveFile={removeFile}
-      />
+      {/* Waves mode: dual dropzones */}
+      {fittingMode === "waves" ? (
+        <div className="space-y-8">
+          {/* Table 1 — Rope Wave */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600 uppercase tracking-wider mb-4">
+              <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 12 Q5 6 8 12 Q11 18 14 12 Q17 6 20 12 L22 12" />
+              </svg>
+              Table 1: Phase Velocity of Rope Waves
+            </h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Upload the photo of Table 1 (transverse waves — 3 tension groups). This graph will have 3 lines.
+            </p>
+            {wavesRopePreview ? (
+              <div className="relative group rounded-xl overflow-hidden border border-slate-200/80 bg-white shadow-sm w-48 mx-auto">
+                <img src={wavesRopePreview} alt="Rope table" className="w-full h-32 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setWavesRopeFileWithPreview(null)}
+                  className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/50 backdrop-blur-sm text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer hover:bg-red-500"
+                  title="Remove image"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-indigo-50/30 hover:border-indigo-300 transition-all">
+                <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm text-slate-400">Click to upload Table 1 image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setWavesRopeFileWithPreview(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+          </div>
 
-      {uploadedFiles.length > 0 && (
-        <p className="mt-3 text-sm text-slate-500 text-center">
-          <span className="font-semibold text-indigo-600">{uploadedFiles.length}</span> image{uploadedFiles.length > 1 ? "s" : ""} selected
-        </p>
+          {/* Table 2 — Sound Wave */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600 uppercase tracking-wider mb-4">
+              <svg className="w-4 h-4 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6a7 7 0 010 12M18.364 5.636a9 9 0 010 12.728" />
+              </svg>
+              Table 2: Velocity of Sound in Air
+            </h2>
+            <p className="text-xs text-slate-400 mb-3">
+              Upload the photo of Table 2 (longitudinal waves — frequency vs air column length). This graph will have 1 line.
+            </p>
+            {wavesSoundPreview ? (
+              <div className="relative group rounded-xl overflow-hidden border border-slate-200/80 bg-white shadow-sm w-48 mx-auto">
+                <img src={wavesSoundPreview} alt="Sound table" className="w-full h-32 object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setWavesSoundFileWithPreview(null)}
+                  className="absolute top-1.5 right-1.5 w-7 h-7 bg-black/50 backdrop-blur-sm text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer hover:bg-red-500"
+                  title="Remove image"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-300 transition-all">
+                <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-sm text-slate-400">Click to upload Table 2 image</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setWavesSoundFileWithPreview(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Standard dropzone */}
+          <FileDropzone
+            onFilesAdd={addFiles}
+            previewUrls={previewUrls}
+            onRemoveFile={removeFile}
+          />
+
+          {uploadedFiles.length > 0 && (
+            <p className="mt-3 text-sm text-slate-500 text-center">
+              <span className="font-semibold text-indigo-600">{uploadedFiles.length}</span> image{uploadedFiles.length > 1 ? "s" : ""} selected
+            </p>
+          )}
+        </>
       )}
 
       {/* Error */}
@@ -178,9 +348,17 @@ export default function UploadPage() {
         </button>
         <button
           onClick={handleExtract}
-          disabled={uploadedFiles.length === 0 || loading}
+          disabled={
+            loading ||
+            (fittingMode === "waves"
+              ? !wavesRopeFile || !wavesSoundFile
+              : uploadedFiles.length === 0)
+          }
           className={`px-8 py-2.5 rounded-xl font-semibold text-white transition-all cursor-pointer flex items-center gap-2 ${
-            uploadedFiles.length > 0 && !loading
+            !loading &&
+            (fittingMode === "waves"
+              ? wavesRopeFile && wavesSoundFile
+              : uploadedFiles.length > 0)
               ? "bg-gradient-to-r from-indigo-600 to-violet-600 shadow-lg shadow-indigo-200/50 hover:shadow-indigo-300/60 hover:-translate-y-0.5 active:translate-y-0"
               : "bg-slate-300 cursor-not-allowed shadow-none"
           }`}

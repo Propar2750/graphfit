@@ -3,7 +3,9 @@ import { useAppContext } from "../context/AppContext";
 
 export default function ResultsPage() {
   const navigate = useNavigate();
-  const { fittingMode, previewUrls, results, reset } = useAppContext();
+  const { fittingMode, previewUrls, results, reset, wavesRopePreview, wavesSoundPreview } = useAppContext();
+
+  const isWaves = fittingMode === "waves";
 
   // Guard: no data
   if (!fittingMode || !results) {
@@ -53,8 +55,63 @@ export default function ResultsPage() {
         </p>
       </div>
 
-      {/* Images + Graph */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-up">
+      {/* Images + Graph(s) */}
+      {isWaves ? (
+        /* ── Waves mode: show 2 graphs ── */
+        <div className="space-y-6 animate-slide-up">
+          {/* Graph 1 — Rope Waves (3 lines) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 group hover:shadow-md transition-shadow">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-blue-600 uppercase tracking-wider mb-4">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 12 Q5 6 8 12 Q11 18 14 12 Q17 6 20 12 L22 12" />
+              </svg>
+              Graph 1: Transverse Waves — λ vs 1/ν (3 Lines)
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {wavesRopePreview && (
+                <div>
+                  <p className="text-xs text-slate-400 mb-2">Source Image</p>
+                  <img src={wavesRopePreview} alt="Rope table" className="w-full rounded-xl object-contain max-h-56 border border-slate-100 bg-slate-50" />
+                </div>
+              )}
+              <div className={wavesRopePreview ? "md:col-span-2" : "md:col-span-3"}>
+                {results.ropeGraphImage ? (
+                  <img src={results.ropeGraphImage} alt="Rope wave graph" className="w-full rounded-xl object-contain max-h-80 border border-slate-100 bg-slate-50" />
+                ) : (
+                  <div className="w-full h-56 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 text-sm border border-slate-100">Graph not available</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Graph 2 — Sound Waves (1 line) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 group hover:shadow-md transition-shadow">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-violet-600 uppercase tracking-wider mb-4">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6a7 7 0 010 12M18.364 5.636a9 9 0 010 12.728" />
+              </svg>
+              Graph 2: Longitudinal Waves — λ vs 1/ν (1 Line)
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {wavesSoundPreview && (
+                <div>
+                  <p className="text-xs text-slate-400 mb-2">Source Image</p>
+                  <img src={wavesSoundPreview} alt="Sound table" className="w-full rounded-xl object-contain max-h-56 border border-slate-100 bg-slate-50" />
+                </div>
+              )}
+              <div className={wavesSoundPreview ? "md:col-span-2" : "md:col-span-3"}>
+                {results.soundGraphImage ? (
+                  <img src={results.soundGraphImage} alt="Sound wave graph" className="w-full rounded-xl object-contain max-h-80 border border-slate-100 bg-slate-50" />
+                ) : (
+                  <div className="w-full h-56 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 text-sm border border-slate-100">Graph not available</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ── Standard mode: single graph ── */
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-slide-up">
         {/* Uploaded images */}
         {previewUrls && previewUrls.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 group hover:shadow-md transition-shadow">
@@ -103,6 +160,7 @@ export default function ResultsPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* Equation card */}
       <div className="mt-6 relative overflow-hidden bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 animate-slide-up-slow group hover:shadow-md transition-shadow">
@@ -116,17 +174,91 @@ export default function ResultsPage() {
           Fitted Equation
         </h2>
         <div className="bg-gradient-to-r from-indigo-50 to-violet-50 rounded-xl px-6 py-4 mb-4 border border-indigo-100/50">
-          <p className="text-xl sm:text-2xl font-mono font-bold bg-gradient-to-r from-indigo-700 to-violet-700 bg-clip-text text-transparent">
+          <p className="text-xl sm:text-2xl font-mono font-bold bg-gradient-to-r from-indigo-700 to-violet-700 bg-clip-text text-transparent whitespace-pre-line">
             {results.equation}
           </p>
         </div>
-        <p className="text-slate-600 text-sm leading-relaxed">
+        <p className="text-slate-600 text-sm leading-relaxed whitespace-pre-line">
           {results.description}
         </p>
       </div>
 
-      {/* Data points table */}
-      {results.points && results.points.length > 0 && (
+      {/* Data points table(s) */}
+      {isWaves ? (
+        <div className="mt-6 space-y-4">
+          {/* Rope data points */}
+          {results.ropePoints && results.ropePoints.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 animate-slide-up-slow group hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-blue-600 uppercase tracking-wider">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                  </svg>
+                  Rope Wave Data
+                </h2>
+                <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">{results.ropePoints.length} rows</span>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-slate-100">
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="bg-slate-50/80 text-slate-500">
+                      <th className="py-3 px-4 font-medium">#</th>
+                      {(results.ropeColumns && results.ropeColumns.length > 0
+                        ? results.ropeColumns
+                        : ["Group", "1/ν", "λ"]
+                      ).map((col, j) => (<th key={j} className="py-3 px-4 font-medium">{col}</th>))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.ropePoints.map((row, i) => (
+                      <tr key={i} className="border-t border-slate-100 hover:bg-blue-50/30 transition-colors">
+                        <td className="py-2.5 px-4 text-slate-400 font-mono text-xs">{i + 1}</td>
+                        {row.map((val, j) => (<td key={j} className="py-2.5 px-4 font-mono text-slate-700">{val}</td>))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+          {/* Sound data points */}
+          {results.soundPoints && results.soundPoints.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 animate-slide-up-slow group hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-violet-600 uppercase tracking-wider">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                  </svg>
+                  Sound Wave Data
+                </h2>
+                <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">{results.soundPoints.length} rows</span>
+              </div>
+              <div className="overflow-x-auto rounded-xl border border-slate-100">
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="bg-slate-50/80 text-slate-500">
+                      <th className="py-3 px-4 font-medium">#</th>
+                      {(results.soundColumns && results.soundColumns.length > 0
+                        ? results.soundColumns
+                        : ["Frequency (Hz)", "Length (cm)"]
+                      ).map((col, j) => (<th key={j} className="py-3 px-4 font-medium">{col}</th>))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.soundPoints.map((row, i) => (
+                      <tr key={i} className="border-t border-slate-100 hover:bg-violet-50/30 transition-colors">
+                        <td className="py-2.5 px-4 text-slate-400 font-mono text-xs">{i + 1}</td>
+                        {row.map((val, j) => (<td key={j} className="py-2.5 px-4 font-mono text-slate-700">{val}</td>))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        results.points && results.points.length > 0 && (
         <div className="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 animate-slide-up-slow group hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-500 uppercase tracking-wider">
@@ -165,6 +297,7 @@ export default function ResultsPage() {
             </table>
           </div>
         </div>
+      )
       )}
 
       {/* Actions */}
