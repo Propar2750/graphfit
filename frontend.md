@@ -1,8 +1,6 @@
 # GraphFit — Frontend Documentation
 
-## Overview
-
-GraphFit is a web app where users upload a **photo of a data table**, and the system extracts the numbers, fits a curve to the data, and displays the fitted graph along with its equation. The frontend is fully built; the backend (ML pipeline) is pending.
+> **Master reference:** See `claude.md` for project overview and links to all docs.
 
 ## Tech Stack
 
@@ -19,100 +17,107 @@ GraphFit is a web app where users upload a **photo of a data table**, and the sy
 frontend/
 ├── index.html
 ├── package.json
-├── vite.config.js              # Vite config — React + Tailwind plugins
+├── vite.config.js              # Vite config — React + Tailwind plugins + /api proxy
 ├── public/
-│   └── vite.svg
 └── src/
     ├── main.jsx                # App entry — renders <App /> into #root
     ├── index.css               # Tailwind import (@import "tailwindcss")
-    ├── App.jsx                 # Router setup, wraps everything in AppProvider
+    ├── App.jsx                 # Router: / → /upload → /review → /results
     ├── context/
-    │   └── AppContext.jsx      # Global state: fittingMode, uploadedFile, previewUrl
+    │   └── AppContext.jsx      # Global state for entire flow + waves dual-table state
     ├── components/
     │   ├── Navbar.jsx          # Top nav bar with "GraphFit" brand link
     │   ├── Layout.jsx          # Page shell: Navbar + <Outlet /> + footer
     │   └── FileDropzone.jsx    # Drag-and-drop / click-to-browse image uploader
     └── pages/
-        ├── HomePage.jsx        # Landing: hero, how-it-works, fitting mode cards
-        ├── UploadPage.jsx      # Upload: mode badge, dropzone, preview, "Analyze" btn
-        └── ResultsPage.jsx     # Results: uploaded image, fitted graph placeholder,
-                                #   equation card, extracted data table, "Start Over"
+        ├── HomePage.jsx        # Landing: hero, how-it-works, 11 fitting mode cards
+        ├── UploadPage.jsx      # Image upload + OCR extract trigger
+        ├── ReviewPage.jsx      # Editable data table before fitting (most complex page)
+        └── ResultsPage.jsx     # Graph image + equation + data points display
 ```
 
-## Routes
+## Routes & User Flow
 
 | Path       | Component      | Purpose                                           |
 |------------|----------------|---------------------------------------------------|
 | `/`        | `HomePage`     | Intro, how it works, select a fitting mode        |
-| `/upload`  | `UploadPage`   | Upload a data table image, preview, click Analyze |
-| `/results` | `ResultsPage`  | Show extracted data, equation, fitted graph area  |
-
-## User Flow
-
-```
-Home (/)
-  └─ User picks a fitting mode (card click)
-       └─ Upload (/upload)
-            └─ User drops/selects a data table image
-                 └─ Click "Analyze Graph"
-                      └─ Results (/results)
-                           └─ Shows: uploaded image | fitted graph (placeholder)
-                                     equation | data table
-                           └─ "Start Over" → back to Home
-```
-
-## Fitting Modes (defined in HomePage.jsx)
-
-| ID              | Label                      | Description                                              |
-|-----------------|----------------------------|----------------------------------------------------------|
-| `straight-line` | Straight Line              | Fit y = mx + c (least-squares linear regression)         |
-| `cmc`           | Physical Exp. 1 — CMC      | Concentration vs. surface tension; find Critical Micelle Concentration via two-segment linear regression breakpoint |
-
-## Global State (AppContext)
+| `/upload`  | `UploadPage`   | Upload data table image(s), trigger OCR           |
+| `/review`  | `ReviewPage`   | Edit extracted data before fitting                |
+| `/results` | `ResultsPage`  | Show fitted graph, equation, data points          |
 
 ```
-fittingMode   : string | null    — "straight-line" or "cmc"
-uploadedFile  : File   | null    — the image File object from the user
-previewUrl    : string | null    — object URL for the image preview
-
-selectMode(id)   — sets fittingMode
-setFile(file)    — sets uploadedFile + generates previewUrl
-reset()          — clears all three values
+Home → select mode → Upload → drop image(s) → Extract Data
+  → Review → edit table → Fit Curve → Results → graph + equation
+  → "Start Over" → Home
 ```
 
-## What the Backend Needs to Provide
+## Global State (AppContext.jsx)
 
-When the backend is built, it needs **one API endpoint** that the frontend will call:
+### Standard mode state
+| Field | Type | Purpose |
+|-------|------|---------|
+| `fittingMode` | `string \| null` | Selected mode ID (e.g. `"straight-line"`) |
+| `uploadedFiles` | `File[]` | Image files from the user |
+| `previewUrls` | `string[]` | Blob URLs for image previews |
+| `extractedData` | `{ columns, rows }` | OCR output after `/api/extract` |
+| `results` | `object` | Fit results from `/api/fit` |
 
-### `POST /api/analyze`
+### Waves mode dual-table state
+| Field | Type | Purpose |
+|-------|------|---------|
+| `wavesRopeFile` / `wavesRopePreview` | `File` / `string` | Rope wave table image |
+| `wavesSoundFile` / `wavesSoundPreview` | `File` / `string` | Sound wave table image |
+| `wavesRopeData` / `wavesSoundData` | `{ columns, rows }` | OCR output for each table |
 
-**Request** (multipart/form-data):
-| Field  | Type   | Description                              |
-|--------|--------|------------------------------------------|
-| `image`| File   | The uploaded data table image             |
-| `mode` | string | `"straight-line"` or `"cmc"`             |
+### Key methods
+- `selectMode(id)` — sets fitting mode, navigates to upload
+- `addFiles(files)` / `removeFile(index)` — manage uploaded images
+- `setWavesRopeFileWithPreview(file)` / `setWavesSoundFileWithPreview(file)` — waves mode
+- `reset()` — clears all state, returns to home
 
-**Expected Response** (JSON):
-```json
-{
-  "equation": "y = 2.34x + 1.07",
-  "description": "Fitted a straight line ...",
-  "points": [[1, 3.4], [2, 5.7], [3, 8.1]],
-  "graphImageUrl": "/api/graph/abc123.png"   // or base64 data URL
-}
-```
+## Fitting Modes (11 total — defined in HomePage.jsx)
 
-### Frontend integration points to update:
+| ID | Title |
+|----|-------|
+| `straight-line` | Straight Line |
+| `cmc` | Chemistry — CMC |
+| `photoelectric-1-1` | Exp 1.1 — Photoelectric (V-I) |
+| `photoelectric-1-2` | Exp 1.2 — Photoelectric (h) |
+| `photoelectric-1-3` | Exp 1.3 — Photoelectric (Intensity) |
+| `single-slit` | Exp 2 — Single Slit Diffraction |
+| `newtons-rings` | Exp 3 — Newton's Rings |
+| `pohls-damped` | Exp 4.1 — Pohl's Pendulum (Damped) |
+| `pohls-forced` | Exp 4.2 — Pohl's Pendulum (Forced) |
+| `polarization` | Exp 6 — Optical Rotation |
+| `waves` | Exp 7 — Transverse & Longitudinal Waves |
 
-1. **`UploadPage.jsx` → `handleAnalyze()`** — currently just does `navigate("/results")`. Replace with an API call that sends the image + mode, stores the response, then navigates.
-2. **`ResultsPage.jsx` → `MOCK_RESULTS`** — currently hardcoded mock data. Replace with the actual API response stored in context/state.
-3. **`AppContext.jsx`** — add a `results` state field to store the backend response.
+Mode entries are objects with `{ id, title, description, icon }` in the `FITTING_MODES` array.
+
+## Page-Specific Details
+
+### UploadPage.jsx
+- **Standard modes**: Multi-file dropzone, sends each to `POST /api/extract` with the mode
+- **Waves mode**: Two separate single-file dropzones (rope + sound), sends to `/api/extract` with modes `waves-rope` and `waves-sound`
+- Extract button calls OCR, stores result in `extractedData` (or waves state), navigates to `/review`
+
+### ReviewPage.jsx (most complex page)
+- **Standard modes**: Single editable table — inline cell editing, add/delete rows
+- **Waves mode**: Two side-by-side editable tables (rope with blue theme, sound with violet theme)
+- Column headers are editable
+- "Fit Curve" button sends data to `/api/fit` (standard) or `/api/fit-waves` (waves)
+- Stores result in `results`, navigates to `/results`
+
+### ResultsPage.jsx
+- **Standard modes**: Single graph image (`results.graphImage` as base64), equation card, data points table
+- **Waves mode**: Two graph cards side-by-side (`results.ropeGraphImage`, `results.soundGraphImage`)
+- Equation display uses `whitespace-pre-line` for multi-line equations
+- Source image previews shown alongside
 
 ## Running
 
 ```bash
 cd frontend
 npm install
-npm run dev        # → http://localhost:5173
+npm run dev        # → http://localhost:5173 (proxies /api → localhost:8000)
 npm run build      # → production build in dist/
 ```

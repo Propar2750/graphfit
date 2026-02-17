@@ -215,8 +215,11 @@ export default function HomePage() {
 
         <div className="relative">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100 text-sm font-medium text-indigo-700 mb-6">
-            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-            Powered by ML
+            <span>Photo</span>
+            <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            <span>Table</span>
+            <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            <span>Graph</span>
           </div>
 
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6">
@@ -242,6 +245,10 @@ export default function HomePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </a>
+
+          <p className="mt-5 text-xs text-slate-400 tracking-wide">
+            No sign-up needed &middot; 100% free &middot; Results in seconds
+          </p>
         </div>
       </section>
 
@@ -256,17 +263,20 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-8">
+          {/* Connector arrows between cards (desktop only) */}
+          <div className="hidden sm:flex absolute top-1/2 left-1/3 -translate-x-1/2 -translate-y-1/2 z-10 text-indigo-300">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </div>
+          <div className="hidden sm:flex absolute top-1/2 left-2/3 -translate-x-1/2 -translate-y-1/2 z-10 text-indigo-300">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+          </div>
+
           {STEPS.map((item, i) => (
             <div
               key={item.step}
               className={`relative group rounded-2xl p-6 bg-white border border-slate-200/80 shadow-sm hover:shadow-md transition-all stagger-${i + 1} animate-slide-up`}
             >
-              {/* Connector line */}
-              {i < 2 && (
-                <div className="hidden sm:block absolute top-1/2 -right-3 w-6 h-px bg-slate-300 z-10" />
-              )}
-
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center mb-4 shadow-lg shadow-indigo-200/40 group-hover:scale-105 transition-transform">
                 {item.icon}
               </div>

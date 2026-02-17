@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAppContext } from "../context/AppContext";
 import FileDropzone from "../components/FileDropzone";
+import CameraCapture from "../components/CameraCapture";
 
 const MODE_LABELS = {
   "straight-line": "Straight Line Fit (y = mx + c)",
@@ -40,6 +41,7 @@ export default function UploadPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(""); // progress text while extracting
+  const [cameraTarget, setCameraTarget] = useState(null); // "rope" | "sound" | null
 
   // Guard: redirect if no mode is selected
   if (!fittingMode) {
@@ -217,6 +219,7 @@ export default function UploadPage() {
 
       {/* Waves mode: dual dropzones */}
       {fittingMode === "waves" ? (
+        <>
         <div className="space-y-8">
           {/* Table 1 — Rope Wave */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
@@ -244,22 +247,35 @@ export default function UploadPage() {
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-indigo-50/30 hover:border-indigo-300 transition-all">
-                <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-sm text-slate-400">Click to upload Table 1 image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) setWavesRopeFileWithPreview(f);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              <div className="space-y-2">
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-indigo-50/30 hover:border-indigo-300 transition-all">
+                  <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm text-slate-400">Click to upload Table 1 image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) setWavesRopeFileWithPreview(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCameraTarget("rope")}
+                  className="w-full flex items-center justify-center gap-2 h-10 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer transition-all text-slate-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/30"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-xs font-medium">Take Photo</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -289,25 +305,51 @@ export default function UploadPage() {
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-300 transition-all">
-                <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                <span className="text-sm text-slate-400">Click to upload Table 2 image</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) setWavesSoundFileWithPreview(f);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              <div className="space-y-2">
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-violet-50/30 hover:border-violet-300 transition-all">
+                  <svg className="w-8 h-8 text-slate-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm text-slate-400">Click to upload Table 2 image</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) setWavesSoundFileWithPreview(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCameraTarget("sound")}
+                  className="w-full flex items-center justify-center gap-2 h-10 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer transition-all text-slate-400 hover:text-violet-600 hover:border-violet-300 hover:bg-violet-50/30"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-xs font-medium">Take Photo</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
+
+        {/* Camera modal for waves mode */}
+        {cameraTarget && (
+          <CameraCapture
+            onCapture={(file) => {
+              if (cameraTarget === "rope") setWavesRopeFileWithPreview(file);
+              else if (cameraTarget === "sound") setWavesSoundFileWithPreview(file);
+              setCameraTarget(null);
+            }}
+            onClose={() => setCameraTarget(null)}
+          />
+        )}
+        </>
       ) : (
         <>
           {/* Standard dropzone */}

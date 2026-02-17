@@ -155,7 +155,7 @@ export default function Navbar() {
             <div className="w-px h-5 bg-slate-200 mx-1.5" />
 
             <a
-              href="https://github.com"
+              href="https://github.com/Propar2750"
               target="_blank"
               rel="noopener noreferrer"
               className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all"
@@ -283,7 +283,7 @@ export default function Navbar() {
           <div className="h-px bg-slate-100 mx-1 !my-2" />
 
           <a
-            href="https://github.com"
+            href="https://github.com/Propar2750"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all"
